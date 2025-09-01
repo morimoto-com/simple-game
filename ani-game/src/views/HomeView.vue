@@ -43,18 +43,18 @@ const router = useRouter()
 
 const games: GameSummary[] = [
   {
-    title: 'Whac-a-Mole（モグラ叩き）',
-    desc: '出現/退場をバウンスさせるアニメーションとスコア管理を練習',
-    path: '/whac-a-mole',
-    emoji: '🛠️',
-    badges: ['transition', 'Pinia'],
-  },
-  {
     title: 'Memory Cards（神経衰弱）',
     desc: 'カードのフリップ演出（rotateY）と状態遷移の基礎',
     path: '/memory',
     emoji: '🃏',
     badges: ['3D flip', 'state'],
+  },
+  {
+    title: 'Whac-a-Mole（モグラ叩き）',
+    desc: '出現/退場をバウンスさせるアニメーションとスコア管理を練習',
+    path: '/whac-a-mole',
+    emoji: '🛠️',
+    badges: ['transition', 'Pinia'],
   },
   {
     title: 'Reflex Test（反射神経）',
