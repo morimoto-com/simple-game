@@ -89,6 +89,17 @@ const props = withDefaults(
   },
 )
 
+const defaultImages = [
+  '/assets/precure/aidle.jpeg',
+  '/assets/precure/kiss.jpeg',
+  '/assets/precure/kyunkyun.jpeg',
+  '/assets/precure/logo.jpeg',
+  '/assets/precure/meruro.jpeg',
+  '/assets/precure/purirun.jpeg',
+  '/assets/precure/wink.jpeg',
+  '/assets/precure/zukyun.jpeg',
+]
+
 // デフォルトのラベル（後で差し替え可能）
 const defaultLabels = ['ゆな', 'まゆ', 'ことね', 'りずむ', 'ひまり', 'あいり', 'さくら', 'つばさ']
 
@@ -100,7 +111,12 @@ const labels = computed(() => {
   return filled
 })
 
-const images = computed(() => props.images?.slice(0, 8))
+const images = computed(() => {
+  const base = props.images?.slice(0, 8) ?? []
+  const filled = [...base]
+  for (let i = base.length; i < 8; i++) filled.push(defaultImages[i])
+  return filled
+})
 
 const cards = reactive<Card[]>([])
 const moves = ref(0)
