@@ -13,6 +13,29 @@
         <span class="label">BEST</span>
         <span class="value">{{ bestText }}</span>
       </div>
+
+      <!-- キャラ切替ボタン -->
+      <div class="hud-item" role="group" aria-label="キャラクターセット切替">
+        <button
+          class="btn"
+          :disabled="isResetting || currentSet === 'precure'"
+          :aria-pressed="currentSet === 'precure'"
+          @click="switchSet('precure')"
+          title="プリキュアに切り替え"
+        >
+          プリキュア
+        </button>
+        <button
+          class="btn"
+          :disabled="isResetting || currentSet === 'aipuri'"
+          :aria-pressed="currentSet === 'aipuri'"
+          @click="switchSet('aipuri')"
+          title="アイプリに切り替え"
+        >
+          アイプリ
+        </button>
+      </div>
+
       <button class="btn" @click="resetGame" :disabled="isResetting" title="リセット">
         ↻ Reset
       </button>
@@ -59,7 +82,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+const PREVIEW_MS = 1500 // リセット直後に全カードを表にする時間（ms）
 
 type Card = {
   uid: string
@@ -71,6 +95,8 @@ type Card = {
   shake?: boolean
   burst?: boolean
 }
+
+type CharacterSet = 'precure' | 'aipuri'
 
 /**
  * 公開プロパティ
@@ -89,34 +115,50 @@ const props = withDefaults(
   },
 )
 
-const defaultImages = [
-  '/assets/precure/aidle.jpeg',
-  '/assets/precure/kiss.jpeg',
-  '/assets/precure/kyunkyun.jpeg',
-  '/assets/precure/logo.jpeg',
-  '/assets/precure/meruro.jpeg',
-  '/assets/precure/purirun.jpeg',
-  '/assets/precure/wink.jpeg',
-  '/assets/precure/zukyun.jpeg',
-]
+/** 内蔵プリセット */
+const characterSets: Record<CharacterSet, { images: string[]; labels: string[] }> = {
+  precure: {
+    images: [
+      '/assets/precure/aidle.jpeg',
+      '/assets/precure/kiss.jpeg',
+      '/assets/precure/kyunkyun.jpeg',
+      '/assets/precure/logo.jpeg',
+      '/assets/precure/meruro.jpeg',
+      '/assets/precure/purirun.jpeg',
+      '/assets/precure/wink.jpeg',
+      '/assets/precure/zukyun.jpeg',
+    ],
+    labels: [
+      'アイドル',
+      'キッス',
+      'キュンキュン',
+      'ロゴ',
+      'メルロ',
+      'プリルン',
+      'ウィンク',
+      'ズキュン',
+    ],
+  },
+  aipuri: {
+    images: [
+      '/assets/aipri/bibi.jpeg',
+      '/assets/aipri/chi.jpeg',
+      '/assets/aipri/crober.jpeg',
+      '/assets/aipri/himari.jpeg',
+      '/assets/aipri/juria.jpeg',
+      '/assets/aipri/mituki.jpeg',
+      '/assets/aipri/subaru.jpeg',
+      '/assets/aipri/tumugi.jpeg',
+    ],
+    labels: ['ビビ', 'チー', 'クローバー', 'ひまり', 'じゅりあ', 'みつき', 'すばる', 'つむぎ'],
+  },
+}
 
-// デフォルトのラベル（後で差し替え可能）
-const defaultLabels = ['ゆな', 'まゆ', 'ことね', 'りずむ', 'ひまり', 'あいり', 'さくら', 'つばさ']
+const currentSet = ref<CharacterSet>('precure')
 
-const labels = computed(() => {
-  // 8件に切り詰め or 足りなければデフォ名で補完
-  const base = props.labels?.slice(0, 8) ?? []
-  const filled = [...base]
-  for (let i = base.length; i < 8; i++) filled.push(defaultLabels[i])
-  return filled
-})
-
-const images = computed(() => {
-  const base = props.images?.slice(0, 8) ?? []
-  const filled = [...base]
-  for (let i = base.length; i < 8; i++) filled.push(defaultImages[i])
-  return filled
-})
+/** props > 内蔵セット の順で採用。将来外部から差し替えてもOK */
+const labels = computed(() => props.labels?.slice(0, 8) ?? characterSets[currentSet.value].labels)
+const images = computed(() => props.images?.slice(0, 8) ?? characterSets[currentSet.value].images)
 
 const cards = reactive<Card[]>([])
 const moves = ref(0)
@@ -223,8 +265,24 @@ function resetGame() {
   const deck = newDeck()
   cards.splice(0, cards.length, ...deck)
 
-  requestAnimationFrame(() => {
-    isResetting.value = false
+  // お手本オープン（描画 → 次フレームで全開 → PREVIEW_MS 後に閉）
+  nextTick(() => {
+    requestAnimationFrame(() => {
+      cards.forEach((c) => {
+        c.flipped = true
+        c.matched = false
+        c.shake = false
+        c.burst = false
+      })
+      setTimeout(() => {
+        cards.forEach((c) => {
+          c.flipped = false
+        })
+        requestAnimationFrame(() => {
+          isResetting.value = false
+        })
+      }, PREVIEW_MS)
+    })
   })
 }
 
@@ -251,7 +309,9 @@ const formattedTime = computed(() => {
   return `${m}:${s}`
 })
 
-const bestKey = 'idol-precure-memory-best'
+/** セット別ベストを保存するキー */
+const bestStorageKey = computed(() => `idol-memory-best-${currentSet.value}`)
+
 const bestText = computed(() => {
   const best = loadBest()
   if (!best) return '—'
@@ -264,7 +324,7 @@ const bestText = computed(() => {
 
 function loadBest(): { time: number; moves: number } | null {
   try {
-    const raw = localStorage.getItem(bestKey)
+    const raw = localStorage.getItem(bestStorageKey.value)
     if (!raw) return null
     return JSON.parse(raw)
   } catch {
@@ -279,14 +339,24 @@ function saveBest() {
     seconds.value < best.time ||
     (seconds.value === best.time && moves.value < best.moves)
   ) {
-    localStorage.setItem(bestKey, JSON.stringify({ time: seconds.value, moves: moves.value }))
+    localStorage.setItem(
+      bestStorageKey.value,
+      JSON.stringify({ time: seconds.value, moves: moves.value }),
+    )
   }
+}
+
+/** セット切替（watcher が resetGame を実行） */
+function switchSet(set: CharacterSet) {
+  if (currentSet.value === set) return
+  currentSet.value = set
 }
 
 onMounted(() => {
   resetGame()
 })
 
+/** セット変更や外部 props 差し替えでデッキを作り直す */
 watch([images, labels], () => {
   resetGame()
 })
@@ -337,6 +407,13 @@ watch([images, labels], () => {
   font-weight: 600;
   cursor: pointer;
   font-size: 14px;
+}
+.btn[aria-pressed='true'] {
+  outline: 2px solid #60a5fa;
+}
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 .btn.primary {
   background: #2563eb;
